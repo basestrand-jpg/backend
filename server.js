@@ -15,24 +15,33 @@ const server = http.createServer(app);
 /* ================= SAFE CORS SETUP ================= */
 
 const allowedOrigins = [
-  process.env.FRONTEND_URL,
+  "https://frontend-crmnew.vercel.app",
   "http://localhost:3000",
   "http://localhost:5173"
-].filter(Boolean);
+];
 
-app.use(cors({
+const corsOptions = {
   origin: function (origin, callback) {
-    // allow mobile apps / postman
+
+    // allow requests without origin
     if (!origin) return callback(null, true);
 
+    // allow main frontend
     if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // allow ALL Vercel preview deployments
+    if (origin.includes("vercel.app")) {
       return callback(null, true);
     }
 
     return callback(new Error("CORS blocked: " + origin));
   },
   credentials: true
-}));
+};
+
+app.use(cors(corsOptions));
 
 app.use(express.json());
 
@@ -40,7 +49,7 @@ app.use(express.json());
 
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: true,
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -127,6 +136,7 @@ app.post('/api/create-payfast-checkout', (req, res) => {
     res.json({ url });
 
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "PayFast error" });
   }
 });
