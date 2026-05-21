@@ -12,24 +12,31 @@ const customerRoutes = require('./routes/customers');
 const app = express();
 const server = http.createServer(app);
 
-/* ================= SECURITY CORS ================= */
+/* ================= SAFE CORS SETUP ================= */
 
 const allowedOrigins = [
   process.env.FRONTEND_URL,
-];
+  "http://localhost:3000",
+  "http://localhost:5173"
+].filter(Boolean);
 
 app.use(cors({
   origin: function (origin, callback) {
+    // allow mobile apps / postman
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error("CORS blocked"));
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error("CORS blocked: " + origin));
   },
   credentials: true
 }));
 
 app.use(express.json());
 
-/* ================= SOCKET ================= */
+/* ================= SOCKET.IO ================= */
 
 const io = new Server(server, {
   cors: {
@@ -50,6 +57,18 @@ mongoose.connect(process.env.MONGO_URI)
 app.use('/auth', authRoutes);
 app.use('/customers', customerRoutes);
 
+/* ================= DEBUG ROUTE ================= */
+
+app.get('/debug-cors', (req, res) => {
+  res.json({
+    message: "CORS working correctly",
+    origin: req.headers.origin || null,
+    allowedOrigins,
+    frontendEnv: process.env.FRONTEND_URL || null,
+    backendEnv: process.env.BACKEND_URL || null
+  });
+});
+
 /* ================= CHAT ================= */
 
 const ChatSchema = new mongoose.Schema({
@@ -69,7 +88,7 @@ app.get('/api/chat/:companyGroup', async (req, res) => {
   res.json(messages);
 });
 
-/* ================= PAYFAST (PROD SAFE) ================= */
+/* ================= PAYFAST ================= */
 
 app.post('/api/create-payfast-checkout', (req, res) => {
   try {
@@ -116,7 +135,7 @@ app.post('/api/payfast-notify', (req, res) => {
   res.status(200).send("OK");
 });
 
-/* ================= START ================= */
+/* ================= START SERVER ================= */
 
 const PORT = process.env.PORT || 5000;
 
