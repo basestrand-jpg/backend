@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const http = require('http');
-const crypto = require('crypto');
 const { Server } = require('socket.io');
 require('dotenv').config();
 
@@ -16,19 +15,41 @@ const server = http.createServer(app);
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:5000";
 
-// ================= CORS FIX =================
+// ================= CORS (STABLE FIX) =================
+const allowedOrigins = [
+  FRONTEND_URL,
+  "http://localhost:5173"
+];
+
 app.use(cors({
-  origin: FRONTEND_URL,
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(null, false);
+  },
   credentials: true
 }));
 
 app.use(express.json());
 
-// ================= SOCKET =================
+// ================= SOCKET.IO =================
 const io = new Server(server, {
   cors: {
-    origin: FRONTEND_URL,
-    methods: ["GET", "POST"]
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(null, false);
+    },
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
@@ -55,60 +76,23 @@ app.get('/api/chat/:companyGroup', async (req, res) => {
   try {
     const messages = await Chat.find({ companyGroup: req.params.companyGroup })
       .sort({ timestamp: 1 });
+
     res.json(messages);
   } catch (err) {
     res.status(500).json(err);
   }
 });
 
-// ================= PAYFAST =================
+// ================= FREE ACCESS (PAYMENT REMOVED) =================
 app.post('/api/create-payfast-checkout', (req, res) => {
-  const buyerEmail = req.body.email || 'info@28daydiet.co.za';
-  const buyerId = req.body.userId || 'USER-' + Date.now();
-
-  const payfastData = {
-    merchant_id: process.env.PAYFAST_MERCHANT_ID,
-    merchant_key: process.env.PAYFAST_MERCHANT_KEY,
-    return_url: `${FRONTEND_URL}/dashboard?payment=success`,
-    cancel_url: `${FRONTEND_URL}/dashboard?payment=cancel`,
-    notify_url: `${BACKEND_URL}/api/payfast-notify`,
-    name_first: 'CRM',
-    name_last: 'Subscriber',
-    email_address: buyerEmail.toString().trim(),
-    m_payment_id: buyerId.toString().trim(),
-    amount: '50.00',
-    item_name: 'NovaCRM Monthly Premium Subscription Plan',
-    subscription_type: '1',
-    billing_cycle: '3',
-    frequency: '3',
-    cycles: '0'
-  };
-
-  let pfParamString = '';
-  Object.keys(payfastData).forEach((key) => {
-    if (payfastData[key]) {
-      pfParamString += `${key}=${encodeURIComponent(payfastData[key])
-        .replace(/%20/g, '+')}&`;
-    }
+  res.json({
+    success: true,
+    freeAccess: true,
+    message: "Payment disabled - full access granted"
   });
-
-  pfParamString = pfParamString.slice(0, -1);
-
-  const passphrase = process.env.PAYFAST_PASSPHRASE;
-
-  if (passphrase) {
-    pfParamString += `&passphrase=${encodeURIComponent(passphrase).replace(/%20/g, '+')}`;
-  }
-
-  const signature = crypto.createHash('md5').update(pfParamString).digest('hex');
-
-  const finalCheckoutUrl = `https://payfast.io?${pfParamString}&signature=${signature}`;
-
-  res.json({ url: finalCheckoutUrl });
 });
 
-// ================= PAYFAST WEBHOOK =================
-app.post('/api/payfast-notify', async (req, res) => {
+app.post('/api/payfast-notify', (req, res) => {
   res.status(200).send('OK');
 });
 
